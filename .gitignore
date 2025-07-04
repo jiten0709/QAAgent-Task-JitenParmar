@@ -210,3 +210,4 @@ __marimo__/
 NOTES.md
 .venv
 src2
+src/agents/__pycache__
