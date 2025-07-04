@@ -1,0 +1,17 @@
+streamlit
+streamlit-option-menu
+streamlit-aggrid
+plotly
+openai
+langchain
+langchain-openai
+langchain-community
+faiss-cpu
+chromadb
+youtube-transcript-api
+pytube
+whisper
+playwright
+pandas
+numpy
+python-dotenv
