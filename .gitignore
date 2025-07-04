@@ -209,5 +209,4 @@ __marimo__/
 # other files
 NOTES.md
 .venv
-src2
 src/agents/__pycache__
