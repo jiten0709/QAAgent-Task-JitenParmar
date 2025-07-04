@@ -15,8 +15,6 @@ import logging
 from typing import Dict, List, Optional
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema import HumanMessage, SystemMessage
-from langchain.chains import RetrievalQA
 from pathlib import Path
 
 # Setup logging
