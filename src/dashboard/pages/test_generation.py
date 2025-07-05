@@ -18,13 +18,11 @@ import sys
 from pathlib import Path
 import json
 import time
-from typing import Dict, List, Optional
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from src.utils.video_processor import VideoProcessor
-from src.utils.llm_client import LLMClient
 from src.agents.test_generator import TestGeneratorAgent
 from src.dashboard.components.sidebar import add_notification, update_stats
 from src.dashboard.components.charts import render_test_category_breakdown, render_custom_metric_card
