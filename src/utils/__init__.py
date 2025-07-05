@@ -8,15 +8,37 @@ This module provides utility functions for:
 - Data processing and validation
 """
 
-from .video_processor import VideoProcessor
-from .llm_client import LLMClient
-from .playwright_converter import PlaywrightConverter
+# Use simplified imports to avoid NLTK issues
+try:
+    from .video_processor import VideoProcessor
+    print("✅ VideoProcessor imported successfully")
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import VideoProcessor: {e}")
+    VideoProcessor = None
 
-__all__ = [
-    "VideoProcessor",
-    "LLMClient", 
-    "PlaywrightConverter"
-]
+try:
+    from .llm_client import LLMClient
+    print("✅ LLMClient imported successfully")
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import LLMClient: {e}")
+    LLMClient = None
+
+try:
+    from .playwright_converter import PlaywrightConverter
+    print("✅ PlaywrightConverter imported successfully")
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import PlaywrightConverter: {e}")
+    PlaywrightConverter = None
+
+# Only export available components
+__all__ = []
+
+if VideoProcessor:
+    __all__.append("VideoProcessor")
+if LLMClient:
+    __all__.append("LLMClient")
+if PlaywrightConverter:
+    __all__.append("PlaywrightConverter")
 
 # Utility configuration
 DEFAULT_CHUNK_SIZE = 30  # seconds

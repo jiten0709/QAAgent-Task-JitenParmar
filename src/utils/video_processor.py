@@ -10,9 +10,24 @@ import nltk
 
 # Download required NLTK data
 try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+    import nltk
+    
+    # Try to find punkt data, if not found, download it
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        print("Downloading NLTK punkt tokenizer...")
+        nltk.download('punkt', quiet=True)
+    
+    # Try to find stopwords data, if not found, download it  
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        print("Downloading NLTK stopwords...")
+        nltk.download('stopwords', quiet=True)
+        
+except Exception as e:
+    print(f"Warning: NLTK setup failed: {e}")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +36,13 @@ logger = logging.getLogger(__name__)
 class VideoProcessor:
     def __init__(self):
         """Initialize Video Processor with Whisper model"""
-        self.whisper_model = whisper.load_model("base")
+        try:
+            import whisper
+            self.whisper_model = whisper.load_model("base")
+            logger.info("✅ Whisper model loaded successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load Whisper model: {e}")
+            self.whisper_model = None
         
         # Action keywords for flow detection
         self.action_keywords = [
@@ -43,6 +64,8 @@ class VideoProcessor:
             "then", "next", "after", "now", "subsequently", "following",
             "once", "when", "if", "finally", "lastly", "first", "second"
         ]
+        
+        logger.info("VideoProcessor initialized successfully")
     
     def download_video(self, youtube_url: str, output_dir: str = "src/data/videos") -> Dict:
         """Download video from YouTube URL"""
@@ -103,10 +126,17 @@ class VideoProcessor:
         
         # Fallback to Whisper
         try:
+            if self.whisper_model is None:
+                raise Exception("Whisper model not available - install with: pip install openai-whisper")
+            
+            if not video_path:
+                raise Exception("Video path required for Whisper transcription")
+            
+            logger.info("Attempting Whisper transcription...")
             result = self.whisper_model.transcribe(video_path)
             
             segments = []
-            for segment in result["segments"]:
+            for segment in result.get("segments", []):
                 segments.append({
                     "text": segment["text"].strip(),
                     "start": segment["start"],
@@ -119,11 +149,14 @@ class VideoProcessor:
                 "segments": segments,
                 "method": "whisper"
             }
-            logger.info("Transcript extracted using Whisper")
+            logger.info("✅ Transcript extracted using Whisper")
             
         except Exception as e:
-            logger.error(f"Whisper transcription failed: {str(e)}")
-            transcript_data = {"success": False, "error": str(e)}
+            logger.error(f"❌ Whisper transcription failed: {str(e)}")
+            transcript_data = {
+                "success": False, 
+                "error": f"All transcription methods failed. Last error: {str(e)}"
+            }
         
         return transcript_data
     
@@ -384,6 +417,13 @@ class VideoProcessor:
             words = text.split()[:5]
             return " ".join(words).title() + " Flow"
     
+    def process_video_content(self, youtube_url: str) -> Dict:
+        """
+        Process video content - alias for process_video_complete for compatibility
+        This method is called by DataIngestionAgent
+        """
+        return self.process_video_complete(youtube_url)
+
     def _classify_flow_type(self, segment: Dict) -> str:
         """Classify the type of user flow"""
         actions = segment["actions"]

@@ -10,10 +10,11 @@ Integration ready - Works with data ingestion and Playwright converter
 Detailed logging - Comprehensive error tracking and info logging
 """
 
+import datetime
 import json
 import logging
 from typing import Dict, List, Optional
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from pathlib import Path
 
@@ -127,24 +128,106 @@ Focus on:
 - Mobile performance"""
 
 class TestGeneratorAgent:
-    def __init__(self, openai_api_key: Optional[str] = None):
+    def __init__(self, model="gpt-4"):
         """Initialize Test Generator Agent"""
-        self.llm = ChatOpenAI(
-            model="gpt-4o", 
-            temperature=0.1,
-            openai_api_key=openai_api_key
-        )
-        self.retriever = None  # Set from data ingestion
-        self.test_cases_dir = Path("src/data/test_cases")
-        self.test_cases_dir.mkdir(parents=True, exist_ok=True)
+        self.model = model
+        
+        # Initialize LLM with proper import
+        try:
+            from langchain_openai import ChatOpenAI
+            self.llm = ChatOpenAI(
+                model=self.model,
+                temperature=0.3,
+                max_tokens=4000
+            )
+        except ImportError:
+            # Fallback to old import
+            from langchain.chat_models import ChatOpenAI
+            self.llm = ChatOpenAI(
+                model=self.model,
+                temperature=0.3,
+                max_tokens=4000
+            )
         
         # Test case templates
-        self.test_templates = {
+        self.templates = {
             "functional": self._get_functional_template(),
-            "edge_case": self._get_edge_case_template(),
-            "accessibility": self._get_accessibility_template(),
-            "performance": self._get_performance_template()
+            "ui": self._get_ui_template(),
+            "integration": self._get_integration_template(),
+            "edge_case": self._get_edge_case_template()
         }
+        
+        logger.info(f"TestGeneratorAgent initialized with model: {self.model}")
+
+    def _get_functional_template(self):
+        """Get functional test case template"""
+        return """
+        Generate functional test cases for the given application based on the video content.
+        
+        Test Case Format:
+        - ID: Unique test case identifier
+        - Title: Clear, descriptive test case title
+        - Description: What the test case validates
+        - Category: functional, ui, integration, etc.
+        - Priority: critical, high, medium, low
+        - Steps: Detailed step-by-step actions
+        - Expected Results: What should happen
+        - Assertions: Verification points
+        
+        Focus on:
+        1. Core user workflows shown in the video
+        2. UI interactions and validations
+        3. Data input/output scenarios
+        4. Navigation flows
+        5. Error handling scenarios
+        
+        Generate practical, executable test cases that can be automated with Playwright.
+        """
+
+    def _get_ui_template(self):
+        """Get UI test case template"""
+        return """
+        Generate UI-focused test cases based on the video content.
+        
+        Focus on:
+        1. Element visibility and positioning
+        2. Interactive elements (buttons, forms, links)
+        3. Responsive design aspects
+        4. Visual validation
+        5. Cross-browser compatibility
+        
+        Generate test cases that verify the user interface works correctly.
+        """
+
+    def _get_integration_template(self):
+        """Get integration test case template"""
+        return """
+        Generate integration test cases based on the video content.
+        
+        Focus on:
+        1. API interactions shown in the video
+        2. Data flow between components
+        3. Third-party service integrations
+        4. Database operations
+        5. System interactions
+        
+        Generate test cases that verify different system components work together.
+        """
+
+    def _get_edge_case_template(self):
+        """Get edge case test template"""
+        return """
+        Generate edge case and negative test scenarios.
+        
+        Focus on:
+        1. Invalid input handling
+        2. Boundary conditions
+        3. Error scenarios
+        4. Network failures
+        5. Security edge cases
+        
+        Generate test cases that verify system robustness.
+        """
     
     def set_retriever(self, retriever):
         """Set the retriever from data ingestion agent"""
@@ -381,3 +464,117 @@ class TestGeneratorAgent:
                 return []
         except json.JSONDecodeError:
             return self._parse_fallback_response(response.content, "functional")
+        
+    def generate_comprehensive_tests(self, video_content, categories, priorities):
+        """Generate comprehensive test cases based on video content"""
+        try:
+            # Extract relevant information from video content
+            transcript = video_content.get('transcript', '')
+            video_info = video_content.get('video_info', {})
+            
+            all_test_cases = []
+            
+            for category in categories:
+                # Generate test cases for each category
+                template = self.templates.get(category.lower().replace(' ', '_'), self.templates['functional'])
+                
+                prompt = f"""
+                Based on the following video content, generate test cases for {category}:
+                
+                Video Title: {video_info.get('title', 'Unknown')}
+                Video Transcript: {transcript[:2000]}...
+                
+                {template}
+                
+                Generate 3-5 test cases in JSON format.
+                """
+                
+                try:
+                    response = self.llm.invoke(prompt)
+                    # Parse and add test cases
+                    test_cases = self._parse_llm_response(response.content, category)
+                    all_test_cases.extend(test_cases)
+                except Exception as e:
+                    logger.warning(f"Failed to generate {category} tests: {e}")
+                    # Add fallback test case
+                    all_test_cases.append(self._create_fallback_test_case(category))
+            
+            return all_test_cases
+            
+        except Exception as e:
+            logger.error(f"Error in generate_comprehensive_tests: {e}")
+            return self._create_fallback_test_cases()
+
+    def _parse_llm_response(self, response_text, category):
+        """Parse LLM response into test cases"""
+        # Simple parsing - you can make this more sophisticated
+        test_cases = []
+        
+        # Try to extract JSON from response
+        import json
+        import re
+        
+        try:
+            # Look for JSON blocks in the response
+            json_matches = re.findall(r'\{[^{}]*\}', response_text, re.DOTALL)
+            
+            for match in json_matches:
+                try:
+                    test_case = json.loads(match)
+                    test_case['category'] = category
+                    test_cases.append(test_case)
+                except:
+                    continue
+                    
+            if not test_cases:
+                # Fallback: create basic test case from text
+                test_cases.append({
+                    'id': f'TC_{len(test_cases)+1:03d}',
+                    'title': f'{category} Test Case',
+                    'description': response_text[:200] + '...',
+                    'category': category,
+                    'priority': 'medium',
+                    'steps': [{'step': 1, 'action': 'Execute test', 'expected': 'Test passes'}],
+                    'assertions': ['Basic validation']
+                })
+                
+        except Exception as e:
+            logger.warning(f"Failed to parse LLM response: {e}")
+            test_cases.append(self._create_fallback_test_case(category))
+        
+        return test_cases
+
+    def _create_fallback_test_case(self, category):
+        """Create a fallback test case when LLM fails"""
+        return {
+            'id': f'TC_FALLBACK_{category}',
+            'title': f'{category} Test Case (Fallback)',
+            'description': f'Basic {category} test case generated as fallback',
+            'category': category,
+            'priority': 'medium',
+            'steps': [
+                {'step': 1, 'action': 'Navigate to application', 'expected': 'Application loads'},
+                {'step': 2, 'action': 'Perform basic interaction', 'expected': 'Interaction succeeds'}
+            ],
+            'assertions': ['Application is functional', 'No errors occur']
+        }
+
+    def _create_fallback_test_cases(self):
+        """Create basic fallback test cases"""
+        return [
+            self._create_fallback_test_case('Core User Flows'),
+            self._create_fallback_test_case('Edge Cases'),
+            self._create_fallback_test_case('UI Validation')
+        ]
+
+    def format_test_cases(self, test_cases):
+        """Format test cases for display"""
+        return {
+            'test_cases': test_cases,
+            'metadata': {
+                'generated_at': datetime.datetime.now().isoformat(),
+                'total_cases': len(test_cases),
+                'generator': 'TestGeneratorAgent',
+                'model': self.model
+            }
+        }
