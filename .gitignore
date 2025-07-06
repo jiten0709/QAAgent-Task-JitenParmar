@@ -211,4 +211,9 @@ NOTES.md
 .venv
 src/agents/__pycache__
 github_openai.example.py
+
+src/data/test_cases/*
+src/data/test_data/*
+src/data/transcripts/*
+src/data/vector_store/*
 src/data/videos/*

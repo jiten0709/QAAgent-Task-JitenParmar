@@ -58,6 +58,20 @@ class DataIngestionAgent:
             "button", "menu", "form", "field", "login", "signup"
         ]
     
+    def _validate_transcript_result(self, transcript_result: Dict) -> bool:
+        """Validate transcript result structure"""
+        if not isinstance(transcript_result, dict):
+            return False
+        
+        if not transcript_result.get("success", False):
+            return False
+        
+        transcript_text = transcript_result.get("transcript", "")
+        if not transcript_text or not isinstance(transcript_text, str):
+            return False
+        
+        return True
+    
     def _create_directories(self):
         """Create necessary directories"""
         self.videos_dir.mkdir(parents=True, exist_ok=True)
@@ -71,38 +85,51 @@ class DataIngestionAgent:
             
             # Step 1: Download video
             download_result = self._download_video(video_url)
-            if not download_result["success"]:
+            if not download_result.get("success", False):
                 return download_result
             
             # Step 2: Extract transcript
-            video_id = download_result["video_id"]
-            transcript_result = self._extract_transcript(video_id, download_result["video_path"])
-            if not transcript_result["success"]:
+            video_id = download_result.get("video_id")
+            if not video_id:
+                return {"success": False, "error": "No video ID found"}
+            
+            video_path = download_result.get("video_path")
+            transcript_result = self._extract_transcript(video_id, video_path)
+            
+            if not transcript_result.get("success", False):
                 return transcript_result
             
-            # Step 3: Chunk and vectorize
-            chunks = self._intelligent_chunking(transcript_result["transcript"])
+            # Step 3: Chunk and vectorize transcript
+            # Pass the full transcript result to chunking
+            chunks = self._intelligent_chunking(transcript_result)
             vectorize_result = self.chunk_and_vectorize(chunks)
             
             # Step 4: Save processed data
-            output_file = self._save_processed_data(video_id, {
+            output_data = {
                 "video_info": download_result,
-                "transcript": transcript_result["transcript"],
+                "transcript": transcript_result.get("transcript", ""),
                 "chunks": chunks,
                 "vector_store_info": vectorize_result
-            })
+            }
             
+            output_file = self._save_processed_data(video_id, output_data)
+            
+            # Return structured result that matches expected format
             return {
                 "success": True,
                 "video_id": video_id,
                 "video_info": download_result,
+                "transcript": transcript_result.get("transcript", ""),
+                "chunks": chunks,
                 "chunks_count": len(chunks),
-                "output_file": str(output_file),
-                "vector_store": self.vector_store
+                "vector_store_info": vectorize_result,
+                "output_file": str(output_file)
             }
             
         except Exception as e:
             logger.error(f"Error processing video: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return {"success": False, "error": str(e)}
     
     def _download_video(self, video_url: str) -> Dict:
@@ -283,97 +310,154 @@ class DataIngestionAgent:
 
     def _get_youtube_transcript(self, video_id: str) -> Dict:
         """Get transcript using YouTube Transcript API"""
-        from youtube_transcript_api import YouTubeTranscriptApi
-        
         try:
-            # Try different language options
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            from youtube_transcript_api import YouTubeTranscriptApi
             
-            # Try English first, then any auto-generated, then any available
-            transcript = None
+            # Get transcript data directly
+            transcript_data = YouTubeTranscriptApi.get_transcript(
+                video_id, 
+                languages=['en', 'en-US', 'en-GB', 'auto']
+            )
             
-            try:
-                transcript = transcript_list.find_transcript(['en'])
-            except:
+            # Format transcript - handle both old and new response formats
+            full_transcript = ""
+            segments = []
+            
+            for entry in transcript_data:
+                # Handle different response formats
                 try:
-                    transcript = transcript_list.find_generated_transcript(['en'])
-                except:
-                    # Get first available transcript
-                    for t in transcript_list:
-                        transcript = t
-                        break
+                    if isinstance(entry, dict):
+                        text = entry.get('text', '')
+                        start = entry.get('start', 0)
+                        duration = entry.get('duration', 0)
+                        end = start + duration
+                    else:
+                        # Handle FetchedTranscriptSnippet objects
+                        text = getattr(entry, 'text', str(entry))
+                        start = getattr(entry, 'start', 0)
+                        duration = getattr(entry, 'duration', 0)
+                        end = start + duration
+                    
+                    # Clean up text
+                    text = str(text).strip()
+                    if text:
+                        full_transcript += text + " "
+                        segments.append({
+                            'text': text,
+                            'start': float(start),
+                            'end': float(end),
+                            'duration': float(duration)
+                        })
+                        
+                except Exception as entry_error:
+                    logger.warning(f"Error processing transcript entry: {entry_error}")
+                    continue
             
-            if not transcript:
-                raise Exception("No transcript available")
-            
-            # Fetch transcript
-            transcript_data = transcript.fetch()
-            
-            # Format transcript
-            full_transcript = " ".join([entry['text'] for entry in transcript_data])
+            if not full_transcript.strip():
+                raise Exception("No transcript text extracted")
             
             return {
                 "success": True,
-                "transcript": full_transcript,
-                "segments": transcript_data,
+                "transcript": full_transcript.strip(),
+                "segments": segments,
                 "method": "youtube_api"
             }
             
         except Exception as e:
+            logger.error(f"YouTube transcript error: {str(e)}")
             raise Exception(f"YouTube transcript failed: {str(e)}")
 
     def _get_whisper_transcript(self, video_path: str) -> Dict:
         """Get transcript using Whisper"""
-        from ..utils.video_processor import VideoProcessor
-        
-        processor = VideoProcessor()
-        
-        if hasattr(processor, 'whisper_model') and processor.whisper_model:
+        try:
+            from ..utils.video_processor import VideoProcessor
+            
+            processor = VideoProcessor()
+            
+            if not hasattr(processor, 'whisper_model') or processor.whisper_model is None:
+                raise Exception("Whisper model not available")
+            
+            logger.info(f"Transcribing video file: {video_path}")
             result = processor.whisper_model.transcribe(video_path)
+            
+            # Format segments
+            segments = []
+            if 'segments' in result:
+                for segment in result['segments']:
+                    segments.append({
+                        'text': segment.get('text', ''),
+                        'start': segment.get('start', 0),
+                        'end': segment.get('end', 0),
+                        'duration': segment.get('end', 0) - segment.get('start', 0)
+                    })
             
             return {
                 "success": True,
-                "transcript": result["text"],
-                "segments": result.get("segments", []),
+                "transcript": result.get("text", ""),
+                "segments": segments,
                 "method": "whisper"
             }
-        else:
-            raise Exception("Whisper model not available")
+            
+        except Exception as e:
+            logger.error(f"Whisper transcription error: {str(e)}")
+            raise Exception(f"Whisper model not available: {str(e)}")
 
     def _create_basic_transcript(self, video_id: str) -> Dict:
         """Create a basic transcript when other methods fail"""
-        basic_transcript = f"""
-        This is a video analysis for video ID: {video_id}
-        
-        Video Content Analysis:
-        - This appears to be a tutorial or demonstration video
-        - The video likely contains user interface interactions
-        - Common elements may include navigation, form filling, and button clicks
-        - The video demonstrates a typical user workflow or process
-        
-        Key Interaction Points:
-        - User navigates to application
-        - User interacts with interface elements
-        - User completes tasks or workflows
-        - Application responds to user actions
-        
-        Testing Focus Areas:
-        - Navigation functionality
-        - Form validation and submission
-        - User interface responsiveness
-        - Error handling and edge cases
-        """
-        
-        return {
-            "success": True,
-            "transcript": basic_transcript,
-            "segments": [{"text": basic_transcript, "start": 0, "end": 120}],
-            "method": "basic_fallback"
-        }
+        try:
+            basic_transcript = f"""
+            This is a video analysis for video ID: {video_id}
+            
+            Video Content Analysis:
+            - This appears to be a tutorial or demonstration video
+            - The video likely contains user interface interactions
+            - Common elements may include navigation, form filling, and button clicks
+            - The video demonstrates a typical user workflow or process
+            
+            Key Interaction Points:
+            - User navigates to application
+            - User interacts with interface elements
+            - User completes tasks or workflows
+            - Application responds to user actions
+            
+            Testing Focus Areas:
+            - Navigation functionality
+            - Form validation and submission
+            - User interface responsiveness
+            - Error handling and edge cases
+            """
+            
+            return {
+                "success": True,
+                "transcript": basic_transcript.strip(),
+                "segments": [{"text": basic_transcript.strip(), "start": 0, "end": 120}],
+                "method": "basic_fallback"
+            }
+        except Exception as e:
+            logger.error(f"Error creating basic transcript: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to create basic transcript: {str(e)}"
+            }
     
-    def _intelligent_chunking(self, transcript: List[Dict]) -> List[Dict]:
+    def _intelligent_chunking(self, transcript_data) -> List[Dict]:
         """Intelligent chunking based on content and actions"""
         chunks = []
+        
+        # Handle different input formats
+        if isinstance(transcript_data, str):
+            # If transcript is a string, create basic chunks
+            return self._chunk_string_transcript(transcript_data)
+        elif isinstance(transcript_data, dict) and 'segments' in transcript_data:
+            # If transcript has segments
+            segments = transcript_data['segments']
+        elif isinstance(transcript_data, list):
+            # If transcript is already a list of segments
+            segments = transcript_data
+        else:
+            # Fallback: treat as string
+            return self._chunk_string_transcript(str(transcript_data))
+        
         current_chunk = {
             "text": "",
             "start_time": 0,
@@ -382,40 +466,51 @@ class DataIngestionAgent:
             "chunk_type": "content"
         }
         
-        for i, segment in enumerate(transcript):
-            text = segment["text"].lower()
+        for i, segment in enumerate(segments):
+            # Handle different segment formats
+            if isinstance(segment, dict):
+                text = segment.get("text", "")
+                start = segment.get("start", 0)
+                duration = segment.get("duration", 0)
+                end = segment.get("end", start + duration)
+            else:
+                # Handle string segments
+                text = str(segment)
+                start = i * 10  # Arbitrary timestamps
+                end = (i + 1) * 10
+            
+            text_lower = text.lower()
             
             # Check for action keywords
-            actions_found = [keyword for keyword in self.action_keywords if keyword in text]
+            actions_found = [keyword for keyword in self.action_keywords if keyword in text_lower]
             
             # Determine if this should start a new chunk
             should_split = (
                 len(current_chunk["text"]) > 800 or  # Size-based split
                 (actions_found and current_chunk["text"]) or  # Action-based split
-                self._is_topic_change(current_chunk["text"], segment["text"])  # Topic change
+                self._is_topic_change(current_chunk["text"], text)  # Topic change
             )
             
             if should_split and current_chunk["text"]:
                 # Finalize current chunk
                 current_chunk["chunk_id"] = len(chunks)
-                current_chunk["end_time"] = transcript[i-1]["start"] + transcript[i-1].get("duration", 0)
                 chunks.append(current_chunk.copy())
                 
                 # Start new chunk
                 current_chunk = {
-                    "text": segment["text"],
-                    "start_time": segment["start"],
-                    "end_time": segment["start"] + segment.get("duration", 0),
+                    "text": text,
+                    "start_time": start,
+                    "end_time": end,
                     "actions": actions_found,
                     "chunk_type": "action" if actions_found else "content"
                 }
             else:
                 # Add to current chunk
                 if not current_chunk["text"]:
-                    current_chunk["start_time"] = segment["start"]
-                current_chunk["text"] += " " + segment["text"]
+                    current_chunk["start_time"] = start
+                current_chunk["text"] += " " + text if current_chunk["text"] else text
                 current_chunk["actions"].extend(actions_found)
-                current_chunk["end_time"] = segment["start"] + segment.get("duration", 0)
+                current_chunk["end_time"] = end
         
         # Add final chunk
         if current_chunk["text"]:
@@ -423,6 +518,43 @@ class DataIngestionAgent:
             chunks.append(current_chunk)
         
         logger.info(f"Created {len(chunks)} intelligent chunks")
+        return chunks
+
+    def _chunk_string_transcript(self, transcript_text: str) -> List[Dict]:
+        """Chunk a plain text transcript"""
+        # Split text into sentences or by length
+        sentences = transcript_text.split('. ')
+        chunks = []
+        current_chunk = ""
+        
+        for i, sentence in enumerate(sentences):
+            if len(current_chunk) + len(sentence) > 800 and current_chunk:
+                # Create chunk
+                actions_found = [keyword for keyword in self.action_keywords if keyword in current_chunk.lower()]
+                chunks.append({
+                    "chunk_id": len(chunks),
+                    "text": current_chunk.strip(),
+                    "start_time": len(chunks) * 30,  # Arbitrary timestamps
+                    "end_time": (len(chunks) + 1) * 30,
+                    "actions": actions_found,
+                    "chunk_type": "action" if actions_found else "content"
+                })
+                current_chunk = sentence
+            else:
+                current_chunk += ". " + sentence if current_chunk else sentence
+        
+        # Add final chunk
+        if current_chunk:
+            actions_found = [keyword for keyword in self.action_keywords if keyword in current_chunk.lower()]
+            chunks.append({
+                "chunk_id": len(chunks),
+                "text": current_chunk.strip(),
+                "start_time": len(chunks) * 30,
+                "end_time": (len(chunks) + 1) * 30,
+                "actions": actions_found,
+                "chunk_type": "action" if actions_found else "content"
+            })
+        
         return chunks
     
     def _is_topic_change(self, previous_text: str, current_text: str) -> bool:

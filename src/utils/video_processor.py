@@ -3,7 +3,6 @@ import json
 import logging
 from typing import Dict, List
 from pathlib import Path
-import whisper
 from pytube import YouTube
 from youtube_transcript_api import YouTubeTranscriptApi
 import nltk
@@ -38,8 +37,19 @@ class VideoProcessor:
         """Initialize Video Processor with Whisper model"""
         try:
             import whisper
+            # Use the correct method name for loading Whisper model
             self.whisper_model = whisper.load_model("base")
             logger.info("✅ Whisper model loaded successfully")
+        except AttributeError as e:
+            logger.warning(f"⚠️ Whisper load_model method not found: {e}")
+            try:
+                # Try alternative import method
+                import openai_whisper as whisper
+                self.whisper_model = whisper.load_model("base")
+                logger.info("✅ Whisper model loaded with alternative method")
+            except Exception as e2:
+                logger.warning(f"⚠️ Alternative Whisper loading failed: {e2}")
+                self.whisper_model = None
         except Exception as e:
             logger.warning(f"⚠️ Could not load Whisper model: {e}")
             self.whisper_model = None
@@ -417,12 +427,60 @@ class VideoProcessor:
             words = text.split()[:5]
             return " ".join(words).title() + " Flow"
     
-    def process_video_content(self, youtube_url: str) -> Dict:
-        """
-        Process video content - alias for process_video_complete for compatibility
-        This method is called by DataIngestionAgent
-        """
-        return self.process_video_complete(youtube_url)
+    def process_video_content(self, video_url: str) -> Dict:
+        """Process video and store in vector database"""
+        try:
+            logger.info(f"Processing video: {video_url}")
+            
+            # Step 1: Download video
+            download_result = self._download_video(video_url)
+            if not download_result.get("success", False):
+                return download_result
+            
+            # Step 2: Extract transcript
+            video_id = download_result.get("video_id")
+            if not video_id:
+                return {"success": False, "error": "No video ID found"}
+            
+            video_path = download_result.get("video_path")
+            transcript_result = self._extract_transcript(video_id, video_path)
+            
+            if not transcript_result.get("success", False):
+                return transcript_result
+            
+            # Step 3: Chunk and vectorize
+            transcript_text = transcript_result.get("transcript", "")
+            if not transcript_text:
+                return {"success": False, "error": "No transcript text found"}
+            
+            chunks = self._intelligent_chunking(transcript_text)
+            vectorize_result = self.chunk_and_vectorize(chunks)
+            
+            # Step 4: Save processed data
+            output_data = {
+                "video_info": download_result,
+                "transcript": transcript_text,
+                "chunks": chunks,
+                "vector_store_info": vectorize_result
+            }
+            
+            output_file = self._save_processed_data(video_id, output_data)
+            
+            # Return structured result
+            return {
+                "success": True,
+                "video_info": download_result,
+                "transcript": transcript_text,
+                "chunks": chunks,
+                "vector_store_info": vectorize_result,
+                "output_file": output_file
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing video: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
 
     def _classify_flow_type(self, segment: Dict) -> str:
         """Classify the type of user flow"""

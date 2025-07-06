@@ -9,6 +9,7 @@ from pathlib import Path
 from src.agents.data_ingestion import DataIngestionAgent
 from src.agents.test_generator import TestGeneratorAgent
 from src.utils.config import load_environment, get_openai_api_key, set_openai_api_key
+import traceback
 
 def main():
     # Load environment variables
@@ -110,6 +111,13 @@ def initialize_session_state():
     
     if 'default_timeout' not in st.session_state:
         st.session_state.default_timeout = 30
+    
+    if 'processing_status' not in st.session_state:
+        st.session_state.processing_status = {
+            'in_progress': False,
+            'step': '',
+            'progress': 0
+        }
 
 def show_api_key_warning():
     """Show API key configuration warning"""
@@ -140,6 +148,109 @@ def show_api_key_warning():
         else:
             st.error("Please enter a valid API key")
 
+def test_with_mock_data():
+    """Test test generation with mock video data"""
+    return {
+        "success": True,
+        "video_info": {
+            "video_id": "test123",
+            "title": "Recruiter.ai Demo - User Registration Process",
+            "description": "This video shows how to register on Recruiter.ai platform"
+        },
+        "transcript": """
+        Welcome to Recruiter.ai. Today I'll show you how to create an account.
+        First, navigate to the signup page by clicking the 'Sign Up' button.
+        Enter your email address in the email field.
+        Create a strong password and confirm it.
+        Select your account type - either Recruiter or Job Seeker.
+        Fill in your profile information including name and company.
+        Click the 'Create Account' button to complete registration.
+        You'll receive a confirmation email to verify your account.
+        Once verified, you can log in and start using the platform.
+        """,
+        "chunks": ["Navigation to signup", "Email entry", "Password creation", "Account type selection", "Profile completion", "Account creation"],
+        "vector_store_info": {"status": "created", "chunks_count": 6}
+    }
+
+def validate_youtube_url(url):
+    """Validate YouTube URL format"""
+    import re
+    
+    if url.lower() == "test":
+        return True, "Mock data URL"
+    
+    youtube_patterns = [
+        r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/',
+        r'(https?://)?(www\.)?youtu\.be/',
+    ]
+    
+    for pattern in youtube_patterns:
+        if re.match(pattern, url):
+            return True, "Valid YouTube URL"
+    
+    return False, "Invalid YouTube URL format"
+
+def debug_video_processing(url):
+    """Debug video processing step by step"""
+    st.write("🔍 Debug: Starting video processing...")
+    
+    data_agent = DataIngestionAgent()
+    
+    # Step 1: Test download
+    st.write("Step 1: Testing download...")
+    download_result = data_agent._download_video(url)
+    st.json(download_result)
+    
+    if download_result.get("success"):
+        # Step 2: Test transcript
+        st.write("Step 2: Testing transcript...")
+        video_id = download_result.get("video_id")
+        video_path = download_result.get("video_path")
+        transcript_result = data_agent._extract_transcript(video_id, video_path)
+        st.json(transcript_result)
+        
+        if transcript_result.get("success"):
+            # Step 3: Test chunking
+            st.write("Step 3: Testing chunking...")
+            chunks = data_agent._intelligent_chunking(transcript_result)
+            st.write(f"Created {len(chunks)} chunks")
+            st.json(chunks[:2])  # Show first 2 chunks
+
+def save_generated_tests_to_file(test_cases, video_info):
+    """Save generated test cases to file for future use"""
+    try:
+        # Create test cases directory
+        test_cases_dir = Path("src/data/test_cases")
+        test_cases_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_title = video_info.get('title', 'Unknown').replace(' ', '_')[:30]
+        filename = f"{video_title}_{timestamp}.json"
+        
+        # Save file
+        file_path = test_cases_dir / filename
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(test_cases, f, indent=2, ensure_ascii=False)
+        
+        st.success(f"💾 Test cases saved to: {filename}")
+        
+        # Update recent generations
+        if 'recent_generations' not in st.session_state:
+            st.session_state.recent_generations = []
+        
+        st.session_state.recent_generations.append({
+            'name': filename,
+            'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            'test_count': len(test_cases.get('test_cases', []))
+        })
+        
+        return str(file_path)
+        
+    except Exception as e:
+        st.warning(f"Could not save test cases to file: {e}")
+        return None
+
 def render_test_generation_page():
     st.header("🎯 Test Case Generation")
     
@@ -157,13 +268,21 @@ def render_test_generation_page():
             video_url = st.text_input(
                 "Enter YouTube URL:",
                 value=st.session_state.video_url,
-                placeholder="https://youtube.com/watch?v=example",
-                help="Paste the URL of the Recruter.ai how-to video",
+                placeholder="https://youtube.com/watch?v=example or type 'test' for demo",
+                help="Paste the URL of the YouTube video or type 'test' for mock data",
                 key="video_url_input"
             )
             # Update session state when value changes
             if video_url != st.session_state.video_url:
                 st.session_state.video_url = video_url
+            
+            # Validate URL in real-time
+            if video_url:
+                is_valid, message = validate_youtube_url(video_url)
+                if is_valid:
+                    st.success(f"✅ {message}")
+                else:
+                    st.error(f"❌ {message}")
         else:
             uploaded_file = st.file_uploader(
                 "Upload video file:",
@@ -205,6 +324,15 @@ def render_test_generation_page():
                 st.error("❌ OpenAI API Key not configured. Please go to Settings to add your API key.")
                 return
             
+            # Validate inputs before processing
+            if not st.session_state.test_categories:
+                st.error("❌ Please select at least one test category.")
+                return
+            
+            if not st.session_state.priority_levels:
+                st.error("❌ Please select at least one priority level.")
+                return
+            
             if input_method == "YouTube URL" and st.session_state.video_url:
                 generate_test_cases_from_url(
                     st.session_state.video_url, 
@@ -237,11 +365,51 @@ def render_test_generation_page():
         
         # Recent generations
         st.subheader("📝 Recent Generations")
-        if 'recent_generations' in st.session_state:
+        if 'recent_generations' in st.session_state and st.session_state.recent_generations:
             for gen in st.session_state.recent_generations[-5:]:
-                st.write(f"• {gen['name']} - {gen['timestamp']}")
+                with st.container():
+                    col_name, col_count = st.columns([3, 1])
+                    with col_name:
+                        st.write(f"📄 {gen['name']}")
+                        st.caption(f"⏰ {gen['timestamp']}")
+                    with col_count:
+                        st.metric("Tests", gen.get('test_count', 0))
         else:
             st.info("No recent generations")
+
+        # Debug section
+        st.markdown("---")
+        st.subheader("🔍 Debug Tools")
+        
+        # Debug video processing
+        if st.button("🔍 Debug Video Processing", use_container_width=True):
+            if st.session_state.video_url:
+                debug_video_processing(st.session_state.video_url)
+            else:
+                st.error("Please enter a video URL first")
+        
+        # Load mock data button
+        if st.button("🧪 Load Mock Data", use_container_width=True):
+            st.session_state.video_url = "test"
+            mock_data = test_with_mock_data()
+            st.success("✅ Mock data loaded!")
+            with st.expander("📄 Mock Data Preview"):
+                st.json({
+                    "title": mock_data["video_info"]["title"],
+                    "transcript_preview": mock_data["transcript"][:200] + "...",
+                    "chunks_count": len(mock_data["chunks"])
+                })
+            st.rerun()
+        
+        # Clear session data
+        if st.button("🗑️ Clear Session", use_container_width=True):
+            # Clear relevant session state
+            keys_to_clear = ['generated_tests', 'generation_stats', 'recent_generations', 'execution_status', 'execution_log']
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.success("✅ Session data cleared!")
+            st.rerun()
 
 def generate_test_cases_from_url(url, categories, priorities, model):
     """Generate test cases from YouTube URL"""
@@ -249,10 +417,26 @@ def generate_test_cases_from_url(url, categories, priorities, model):
     status_text = st.empty()
     
     try:
-        # Ensure API key is set
+        # Validate inputs first
+        if not url or url.strip() == "":
+            st.error("❌ Please enter a valid YouTube URL")
+            return
+        
+        if not categories:
+            st.error("❌ Please select at least one test category")
+            return
+        
+        # Ensure API key is set and valid
         api_key = get_openai_api_key()
         if not api_key:
             st.error("❌ OpenAI API Key not configured")
+            st.info("Please go to Settings to configure your API key")
+            return
+        
+        # Validate API key format
+        if not api_key.startswith('sk-'):
+            st.error("❌ Invalid OpenAI API Key format")
+            st.info("API key should start with 'sk-'")
             return
         
         # Set API key in environment for agents
@@ -357,11 +541,24 @@ def generate_test_cases_from_url(url, categories, priorities, model):
         status_text.empty()
         
     except Exception as e:
-        st.error(f"Error generating test cases: {str(e)}")
-        import traceback
-        st.error(f"Full error: {traceback.format_exc()}")
+        st.error(f"❌ Error generating test cases: {str(e)}")
+        
+        # Show detailed error for debugging
+        with st.expander("🔍 Debug Information"):
+            st.code(traceback.format_exc())
+        
+        # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
+        
+        # Suggest solutions
+        st.info("""
+        **Possible solutions:**
+        1. Try using "test" as URL to use mock data
+        2. Check if your OpenAI API key is valid
+        3. Try a different YouTube URL
+        4. Check your internet connection
+        """)
 
 def create_fallback_test_cases(video_content, categories, priorities):
     """Create basic test cases when the TestGeneratorAgent fails"""
@@ -516,6 +713,10 @@ def display_generated_test_cases(test_cases):
     """Display generated test cases in a user-friendly format"""
     st.success("✅ Test cases generated successfully!")
     
+    # Auto-save to file
+    video_info = test_cases.get('metadata', {})
+    saved_file = save_generated_tests_to_file(test_cases, video_info)
+    
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
     
@@ -528,7 +729,9 @@ def display_generated_test_cases(test_cases):
         high_cases = len([tc for tc in test_cases.get('test_cases', []) if tc.get('priority') == 'high'])
         st.metric("High Priority", high_cases)
     with col4:
-        st.metric("Test Suites", len(set(tc.get('suite', '') for tc in test_cases.get('test_cases', []))))
+        # Calculate unique suites
+        suites = set(tc.get('suite', tc.get('category', 'default')) for tc in test_cases.get('test_cases', []))
+        st.metric("Test Suites", len(suites))
     
     # Store in session state
     st.session_state.generated_tests = test_cases
@@ -1018,7 +1221,6 @@ def generate_sample_detailed_results(status):
 
 def create_trend_chart_data(results):
     """Create sample trend data for charts"""
-    import pandas as pd
     from datetime import datetime, timedelta
     
     dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7, 0, -1)]
@@ -1060,32 +1262,6 @@ def test_openai_connection(api_key):
         st.success("✅ OpenAI API key is valid!")
     except Exception as e:
         st.error(f"❌ OpenAI API key test failed: {str(e)}")
-    
-def test_with_mock_data():
-    """Test test generation with mock video data"""
-    mock_video_content = {
-        "success": True,
-        "video_info": {
-            "video_id": "test123",
-            "title": "Recruiter.ai Demo - User Registration Process",
-            "description": "This video shows how to register on Recruiter.ai platform"
-        },
-        "transcript": """
-        Welcome to Recruiter.ai. Today I'll show you how to create an account.
-        First, navigate to the signup page by clicking the 'Sign Up' button.
-        Enter your email address in the email field.
-        Create a strong password and confirm it.
-        Select your account type - either Recruiter or Job Seeker.
-        Fill in your profile information including name and company.
-        Click the 'Create Account' button to complete registration.
-        You'll receive a confirmation email to verify your account.
-        Once verified, you can log in and start using the platform.
-        """,
-        "chunks": ["Navigation to signup", "Email entry", "Password creation", "Account type selection", "Profile completion", "Account creation"],
-        "vector_store_info": {"status": "created", "chunks_count": 6}
-    }
-
-    return mock_video_content
 
 if __name__ == "__main__":
     main()
