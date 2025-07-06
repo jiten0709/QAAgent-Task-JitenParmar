@@ -216,6 +216,70 @@ def debug_video_processing(url):
             st.write(f"Created {len(chunks)} chunks")
             st.json(chunks[:2])  # Show first 2 chunks
 
+def fix_duplicate_test_ids():
+    """Fix duplicate test case IDs in existing files"""
+    st.subheader("🔧 Fix Duplicate Test IDs")
+    
+    test_files = load_available_test_files()
+    
+    if not test_files:
+        st.warning("No test files found to fix.")
+        return
+    
+    # Show current files with potential issues
+    st.write("**Available test files:**")
+    for test_file in test_files:
+        if test_file['path'] != 'session_state':
+            st.write(f"📄 {test_file['name']} - {test_file['test_count']} test cases")
+    
+    if st.button("🔄 Fix Duplicate IDs in All Files", type="primary"):
+        fixed_count = 0
+        
+        for test_file in test_files:
+            if test_file['path'] != 'session_state':
+                try:
+                    # Load the file
+                    with open(test_file['path'], 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Fix duplicate IDs
+                    test_cases = data.get('test_cases', [])
+                    
+                    # Create backup
+                    backup_path = f"{test_file['path']}.backup"
+                    with open(backup_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    
+                    # Generate unique IDs
+                    for i, test_case in enumerate(test_cases, 1):
+                        test_case['ID'] = f"TC{i:03d}"
+                        test_case['id'] = f"TC{i:03d}"  # Also fix lowercase 'id'
+                    
+                    # Update metadata
+                    if 'metadata' not in data:
+                        data['metadata'] = {}
+                    
+                    data['metadata']['fixed_at'] = datetime.datetime.now().isoformat()
+                    data['metadata']['total_cases'] = len(test_cases)
+                    data['metadata']['fixed_duplicate_ids'] = True
+                    
+                    # Save back to file
+                    with open(test_file['path'], 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    
+                    fixed_count += 1
+                    st.success(f"✅ Fixed {test_file['name']} (backup saved as {backup_path})")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error fixing {test_file['name']}: {e}")
+        
+        if fixed_count > 0:
+            st.success(f"🎉 Successfully fixed {fixed_count} test files!")
+            st.info("💡 Backup files were created with .backup extension")
+            st.rerun()
+        else:
+            st.warning("No files were fixed.")
+
 def save_generated_tests_to_file(test_cases, video_info):
     """Save generated test cases to file for future use"""
     try:
@@ -310,8 +374,8 @@ def render_test_generation_page():
             
             llm_model = st.selectbox(
                 "LLM Model:",
-                ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
-                index=["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"].index(st.session_state.llm_model),
+                ["gpt-4o-mini", "gpt-4o", "gpt-4.1"],
+                index=["gpt-4o-mini", "gpt-4o", "gpt-4.1"].index(st.session_state.llm_model),
                 key="llm_model_input"
             )
             st.session_state.llm_model = llm_model
@@ -400,6 +464,10 @@ def render_test_generation_page():
                     "chunks_count": len(mock_data["chunks"])
                 })
             st.rerun()
+
+        # Fix duplicate test IDs button
+        if st.button("🔧 Fix Duplicate Test IDs", use_container_width=True):
+            fix_duplicate_test_ids()
         
         # Clear session data
         if st.button("🗑️ Clear Session", use_container_width=True):
@@ -741,28 +809,56 @@ def display_generated_test_cases(test_cases):
     
     with tab1:
         # Display test cases in a nice format
-        for i, tc in enumerate(test_cases.get('test_cases', [])):
-            with st.expander(f"TC{i+1:03d}: {tc.get('title', 'Untitled')}", expanded=i < 3):
+        test_list = test_cases.get('test_cases', [])
+        
+        # Fix display numbering for duplicates
+        seen_ids = set()
+        display_counter = 1
+        
+        for i, tc in enumerate(test_list):
+            # Generate display ID
+            original_id = tc.get('ID', tc.get('id', f'TC{display_counter:03d}'))
+            
+            if original_id in seen_ids:
+                display_id = f"TC{display_counter:03d}"
+            else:
+                display_id = original_id
+                seen_ids.add(original_id)
+            
+            with st.expander(f"{display_id}: {tc.get('Title', tc.get('title', 'Untitled'))}", expanded=i < 3):
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
-                    st.write(f"**Description:** {tc.get('description', 'No description')}")
-                    st.write(f"**Category:** {tc.get('category', 'Unknown')}")
+                    st.write(f"**Description:** {tc.get('Description', tc.get('description', 'No description'))}")
+                    st.write(f"**Category:** {tc.get('Category', tc.get('category', 'Unknown'))}")
                     
-                    if tc.get('steps'):
+                    # Handle both Steps and steps
+                    steps = tc.get('Steps', tc.get('steps', []))
+                    if steps:
                         st.write("**Steps:**")
-                        for step in tc['steps']:
-                            st.write(f"  {step.get('step', 0)}. {step.get('action', '')} - {step.get('expected', '')}")
+                        if isinstance(steps, list) and isinstance(steps[0], dict):
+                            # Structured steps
+                            for step in steps:
+                                st.write(f"  {step.get('step', '')}. {step.get('action', step)}")
+                        else:
+                            # Simple string steps
+                            for j, step in enumerate(steps, 1):
+                                st.write(f"  {j}. {step}")
                     
-                    if tc.get('assertions'):
+                    # Handle assertions
+                    assertions = tc.get('Assertions', tc.get('assertions', []))
+                    if assertions:
                         st.write("**Assertions:**")
-                        for assertion in tc['assertions']:
+                        for assertion in assertions:
                             st.write(f"  • {assertion}")
                 
                 with col2:
                     priority_color = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-                    st.write(f"**Priority:** {priority_color.get(tc.get('priority', 'low'), '⚪')} {tc.get('priority', 'Low').title()}")
-                    st.write(f"**ID:** {tc.get('id', 'Unknown')}")
+                    priority = tc.get('Priority', tc.get('priority', 'Low')).lower()
+                    st.write(f"**Priority:** {priority_color.get(priority, '⚪')} {priority.title()}")
+                    st.write(f"**ID:** {display_id}")
+            
+            display_counter += 1
     
     with tab2:
         st.json(test_cases)
@@ -892,6 +988,56 @@ def render_test_execution_page():
         else:
             st.info("No execution logs available")
 
+def save_test_execution_results(execution_results, test_files):
+    """Save test execution results to file"""
+    try:
+        # Create results directory
+        results_dir = Path("src/data/test_results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"execution_results_{timestamp}.json"
+        
+        # Prepare results data
+        results_data = {
+            "execution_id": f"exec_{timestamp}",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "test_files": test_files,
+            "summary": execution_results,
+            "detailed_results": st.session_state.get('execution_log', []),
+            "browser_results": {},
+            "performance_metrics": {
+                "total_duration": execution_results.get('duration', 0),
+                "avg_test_time": execution_results.get('duration', 0) / max(execution_results.get('executed', 1), 1)
+            }
+        }
+        
+        # Save file
+        file_path = results_dir / filename
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(results_data, f, indent=2, ensure_ascii=False)
+        
+        st.success(f"💾 Execution results saved to: {filename}")
+        
+        # Update session state with saved results
+        if 'saved_results' not in st.session_state:
+            st.session_state.saved_results = []
+        
+        st.session_state.saved_results.append({
+            'filename': filename,
+            'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            'total_tests': execution_results.get('executed', 0),
+            'passed': execution_results.get('passed', 0),
+            'failed': execution_results.get('failed', 0)
+        })
+        
+        return str(file_path)
+        
+    except Exception as e:
+        st.warning(f"Could not save execution results: {e}")
+        return None
+    
 def execute_playwright_tests(selected_files, browsers, headless, parallel_execution, capture_options):
     """Execute Playwright tests"""
     progress_bar = st.progress(0)
@@ -948,6 +1094,17 @@ def execute_playwright_tests(selected_files, browsers, headless, parallel_execut
             st.warning(f"Test execution completed with {failed} failures")
         else:
             st.success("All tests passed!")
+        
+        st.session_state.execution_status = {
+            'executed': executed,
+            'passed': passed,
+            'failed': failed,
+            'duration': executed * 0.5
+        }
+        
+        # NEW: Save execution results to file
+        save_test_execution_results(st.session_state.execution_status, selected_files)
+        
         
     except Exception as e:
         st.error(f"Error executing tests: {str(e)}")
@@ -1067,6 +1224,43 @@ def render_results_page():
             st.button("📄 Generate PDF Report", help="PDF report generation coming soon!")
     else:
         st.info("No results match the selected filters.")
+
+def fix_duplicate_test_ids():
+    """Fix duplicate test case IDs in existing files"""
+    st.subheader("🔧 Fix Duplicate Test IDs")
+    
+    test_files = load_available_test_files()
+    
+    if st.button("🔄 Fix Duplicate IDs in All Files"):
+        fixed_count = 0
+        
+        for test_file in test_files:
+            if test_file['path'] != 'session_state':
+                try:
+                    # Load the file
+                    with open(test_file['path'], 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Fix duplicate IDs
+                    test_cases = data.get('test_cases', [])
+                    for i, test_case in enumerate(test_cases, 1):
+                        test_case['ID'] = f"TC{i:03d}"
+                    
+                    # Update metadata
+                    data['metadata']['fixed_at'] = datetime.datetime.now().isoformat()
+                    data['metadata']['total_cases'] = len(test_cases)
+                    
+                    # Save back to file
+                    with open(test_file['path'], 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    
+                    fixed_count += 1
+                    
+                except Exception as e:
+                    st.error(f"Error fixing {test_file['name']}: {e}")
+        
+        st.success(f"✅ Fixed {fixed_count} test files!")
+        st.rerun()
 
 def render_settings_page():
     st.header("⚙️ Settings")
@@ -1188,17 +1382,49 @@ def load_available_test_files():
     return test_files
 
 def load_test_results():
-    """Load test execution results"""
-    # Check if we have execution results in session state
+    """Load test execution results from files and session state"""
+    
+    # First check session state
     if 'execution_status' in st.session_state:
-        status = st.session_state.execution_status
+        session_results = st.session_state.execution_status
+    else:
+        session_results = None
+    
+    # Load from files
+    results_dir = Path("src/data/test_results")
+    file_results = []
+    
+    if results_dir.exists():
+        for file_path in results_dir.glob("*.json"):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    result_data = json.load(f)
+                file_results.append(result_data)
+            except Exception as e:
+                st.warning(f"Could not load {file_path.name}: {e}")
+    
+    # Return most recent or session results
+    if session_results:
         return {
-            'total_tests': status.get('executed', 0),
-            'passed': status.get('passed', 0),
-            'failed': status.get('failed', 0),
+            'total_tests': session_results.get('executed', 0),
+            'passed': session_results.get('passed', 0),
+            'failed': session_results.get('failed', 0),
             'passed_delta': 0,
             'failed_delta': 0,
-            'detailed_results': generate_sample_detailed_results(status)
+            'detailed_results': generate_sample_detailed_results(session_results),
+            'historical_results': file_results
+        }
+    elif file_results:
+        latest = file_results[-1]  # Most recent
+        summary = latest.get('summary', {})
+        return {
+            'total_tests': summary.get('executed', 0),
+            'passed': summary.get('passed', 0),
+            'failed': summary.get('failed', 0),
+            'passed_delta': 0,
+            'failed_delta': 0,
+            'detailed_results': latest.get('detailed_results', []),
+            'historical_results': file_results
         }
     
     return None

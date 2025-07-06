@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global constants
-MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4.1")
+MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEFAULT_TEMPERATURE = 0.1
 DEFAULT_CHUNK_SIZE = 1000

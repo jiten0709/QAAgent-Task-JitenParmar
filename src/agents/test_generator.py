@@ -13,8 +13,7 @@ Detailed logging - Comprehensive error tracking and info logging
 import datetime
 import json
 import logging
-from typing import Dict, List, Optional
-from langchain_community.chat_models import ChatOpenAI
+from typing import Dict, List
 from langchain.prompts import ChatPromptTemplate
 from pathlib import Path
 
@@ -128,7 +127,7 @@ Focus on:
 - Mobile performance"""
 
 class TestGeneratorAgent:
-    def __init__(self, model="gpt-4"):
+    def __init__(self, model="gpt-4o-mini"):
         """Initialize Test Generator Agent"""
         self.model = model
         
@@ -158,6 +157,27 @@ class TestGeneratorAgent:
         }
         
         logger.info(f"TestGeneratorAgent initialized with model: {self.model}")
+
+    def generate_unique_test_ids(self, test_cases):
+        """Generate unique sequential test case IDs"""
+        for i, test_case in enumerate(test_cases, 1):
+            test_case["ID"] = f"TC{i:03d}"  # TC001, TC002, TC003, etc.
+        return test_cases
+
+    def format_test_cases(self, test_cases):
+        """Format test cases with unique IDs"""
+        # Ensure all test cases have unique IDs
+        formatted_cases = self.generate_unique_test_ids(test_cases)
+        
+        return {
+            "test_cases": formatted_cases,
+            "metadata": {
+                "generated_at": datetime.datetime.now().isoformat(),
+                "total_cases": len(formatted_cases),
+                "generator": "TestGeneratorAgent",
+                "model": self.model_name
+            }
+        }
 
     def _get_functional_template(self):
         """Get functional test case template"""
