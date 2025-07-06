@@ -99,7 +99,7 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs([
         "📹 Video Upload", 
         "📝 Manual Input", 
-        "🤖 AI Generation", 
+        "� AI Generation", 
         "📊 Generated Tests"
     ])
     
@@ -322,7 +322,7 @@ def render_manual_input_section():
 
 def render_ai_generation_section():
     """Render AI-powered test generation section"""
-    st.markdown("## 🤖 AI Test Generation")
+    st.markdown("## � AI Test Generation")
     st.markdown("Use advanced AI to generate comprehensive test suites from your processed data.")
     
     if not st.session_state.video_processed and not st.session_state.manual_flows:

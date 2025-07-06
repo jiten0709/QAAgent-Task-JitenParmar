@@ -295,7 +295,7 @@ def _generate_header_section(report_data: Dict) -> str:
     """Generate report header section"""
     return f"""
     <div class="header">
-        <h1>🤖 QAgenie Test Report</h1>
+        <h1>� QAgenie Test Report</h1>
         <div class="subtitle">
             Generated on {report_data['generated_at']}<br>
             Execution ID: {report_data['execution_data'].get('execution_id', 'N/A')}

@@ -3,28 +3,28 @@ import json
 import os
 import pandas as pd
 import streamlit as st
-from streamlit_option_menu import option_menu
 import plotly.express as px
 from pathlib import Path
 from src.agents.data_ingestion import DataIngestionAgent
 from src.agents.test_generator import TestGeneratorAgent
 from src.utils.config import load_environment, get_openai_api_key, set_openai_api_key
 import traceback
+from src.dashboard.components.sidebar import render_sidebar
 
 def main():
     # Load environment variables
     load_environment()
-
+    
     # Initialize session state
     initialize_session_state()
-
+    
     st.set_page_config(
         page_title="QAgenie - AI QA Agent",
-        page_icon="🧩",
+        page_icon="🤖",
         layout="wide",
         initial_sidebar_state="expanded"
     )
-
+    
     # Check if API key is configured
     if not get_openai_api_key():
         show_api_key_warning()
@@ -51,40 +51,28 @@ def main():
     """, unsafe_allow_html=True)
     
     # Header
-    st.markdown('<div class="main-header">🧩 QAgenie - AI QA Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🤖 QAgenie - AI QA Agent</div>', unsafe_allow_html=True)
     st.markdown("*Automated end-to-end frontend test case generation, execution, and reporting*")
     
-    # Sidebar navigation
-    with st.sidebar:
-        st.image("https://via.placeholder.com/200x100/1f77b4/white?text=QAgenie", width=200)
-        
-        # Show API key status
-        api_key = get_openai_api_key()
-        if api_key:
-            st.success("✅ OpenAI API Key Configured")
-        else:
-            st.error("❌ OpenAI API Key Missing")
-        
-        selected = option_menu(
-            menu_title="Navigation",
-            options=["🎯 Test Generation", "🚀 Test Execution", "📊 Results & Reports", "⚙️ Settings"],
-            icons=["target", "rocket", "bar-chart", "gear"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"padding": "0!important", "background-color": "#fafafa"},
-                "icon": {"color": "#1f77b4", "font-size": "18px"},
-                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#eee"},
-                "nav-link-selected": {"background-color": "#1f77b4"},
-            }
-        )
+    # USE THE COMPREHENSIVE SIDEBAR COMPONENT
+    selected = render_sidebar()
+    
+    # Map sidebar selection to page routing
+    page_mapping = {
+        "generation": "🎯 Test Generation",
+        "execution": "🚀 Test Execution", 
+        "results": "📊 Results & Reports",
+        "settings": "⚙️ Settings"
+    }
+    
+    selected_page = page_mapping.get(selected, "🎯 Test Generation")
     
     # Route to appropriate page
-    if selected == "🎯 Test Generation":
+    if selected_page == "🎯 Test Generation":
         render_test_generation_page()
-    elif selected == "🚀 Test Execution":
+    elif selected_page == "🚀 Test Execution":
         render_test_execution_page()
-    elif selected == "📊 Results & Reports":
+    elif selected_page == "📊 Results & Reports":
         render_results_page()
     else:
         render_settings_page()

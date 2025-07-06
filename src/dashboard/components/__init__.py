@@ -9,62 +9,54 @@ This module contains reusable Streamlit components:
 """
 
 from .sidebar import (
-    render_sidebar,
-    add_notification,
-    update_stats,
-    get_current_user,
-    render_user_profile
+    render_sidebar
 )
 
-from .charts import (
-    render_test_execution_overview,
-    render_test_trend_analysis,
-    render_test_category_breakdown,
-    render_performance_metrics,
-    render_error_analysis,
-    render_test_coverage_heatmap,
-    render_browser_compatibility_chart,
-    render_real_time_dashboard,
-    render_custom_metric_card
-)
+# from .charts import (
+#     render_test_execution_overview,
+#     render_test_trend_analysis,
+#     render_test_category_breakdown,
+#     render_performance_metrics,
+#     render_error_analysis,
+#     render_test_coverage_heatmap,
+#     render_browser_compatibility_chart,
+#     render_real_time_dashboard,
+#     render_custom_metric_card
+# )
 
-from .reports import (
-    generate_test_execution_report,
-    export_to_csv,
-    export_to_json,
-    render_report_generation_interface,
-    create_download_link,
-    generate_pdf_report,
-    send_email_report
-)
+# from .reports import (
+#     generate_test_execution_report,
+#     export_to_csv,
+#     export_to_json,
+#     render_report_generation_interface,
+#     create_download_link,
+#     generate_pdf_report,
+#     send_email_report
+# )
 
 __all__ = [
     # Sidebar components
-    "render_sidebar",
-    "add_notification", 
-    "update_stats",
-    "get_current_user",
-    "render_user_profile",
+    "render_sidebar"
     
-    # Chart components
-    "render_test_execution_overview",
-    "render_test_trend_analysis",
-    "render_test_category_breakdown", 
-    "render_performance_metrics",
-    "render_error_analysis",
-    "render_test_coverage_heatmap",
-    "render_browser_compatibility_chart",
-    "render_real_time_dashboard",
-    "render_custom_metric_card",
+    # # Chart components
+    # "render_test_execution_overview",
+    # "render_test_trend_analysis",
+    # "render_test_category_breakdown", 
+    # "render_performance_metrics",
+    # "render_error_analysis",
+    # "render_test_coverage_heatmap",
+    # "render_browser_compatibility_chart",
+    # "render_real_time_dashboard",
+    # "render_custom_metric_card",
     
-    # Report components
-    "generate_test_execution_report",
-    "export_to_csv",
-    "export_to_json", 
-    "render_report_generation_interface",
-    "create_download_link",
-    "generate_pdf_report",
-    "send_email_report"
+    # # Report components
+    # "generate_test_execution_report",
+    # "export_to_csv",
+    # "export_to_json", 
+    # "render_report_generation_interface",
+    # "create_download_link",
+    # "generate_pdf_report",
+    # "send_email_report"
 ]
 
 # Component configuration
