@@ -42,14 +42,7 @@ class VideoProcessor:
             logger.info("✅ Whisper model loaded successfully")
         except AttributeError as e:
             logger.warning(f"⚠️ Whisper load_model method not found: {e}")
-            try:
-                # Try alternative import method
-                import openai_whisper as whisper
-                self.whisper_model = whisper.load_model("base")
-                logger.info("✅ Whisper model loaded with alternative method")
-            except Exception as e2:
-                logger.warning(f"⚠️ Alternative Whisper loading failed: {e2}")
-                self.whisper_model = None
+            self.whisper_model = None
         except Exception as e:
             logger.warning(f"⚠️ Could not load Whisper model: {e}")
             self.whisper_model = None
