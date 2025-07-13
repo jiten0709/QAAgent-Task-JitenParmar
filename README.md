@@ -1,8 +1,8 @@
-# 🤖 QAgenie - AI-Powered QA Testing Platform
+# 🤖 TestRAGic - Turning Inputs into Test Cases — Like Magic, but Smarter
 
 ## 📋 Project Overview
 
-**QAgenie** is an intelligent, end-to-end QA automation platform that revolutionizes how software testing is done. It combines **AI-powered test generation**, **automated test execution**, and **comprehensive reporting** into a single, user-friendly platform.
+**TestRAGic** is an intelligent, end-to-end QA automation platform that revolutionizes how software testing is done. It combines **AI-powered test generation**, **automated test execution**, and **comprehensive reporting** into a single, user-friendly platform.
 
 ## 🎯 What It Can Do
 
@@ -98,10 +98,7 @@
 
 - 📹 **Video Files**: Direct upload of MP4, AVI, MOV, MKV, files
 - 🔗 **YouTube URLs**: Direct URL processing with multiple fallback methods
-- 🌐 **Direct URLs**: Support for direct video file links
 - 🧪 **Mock Data**: Built-in test data for development and demos
-- 📄 **Future**: Documentation (PDF, Word, Markdown)
-- ✍️ **Manual Input**: Custom test scenario definition
 
 ### 2. **Intelligent Test Generation**
 
@@ -157,8 +154,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/jiten0709/QAAgent-Task-JitenParmar.git
-cd QAAgent-Task-JitenParmar
+git clone https://github.com/jiten0709/TestRAGic.git
+cd TestRAGic
 
 # Set up virtual environment (Python 3.11+ recommended)
 python -m venv venv
