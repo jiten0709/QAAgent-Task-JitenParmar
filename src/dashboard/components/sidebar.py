@@ -18,8 +18,8 @@ from src.utils.config import get_openai_api_key
 from typing import Dict
 
 # Global constants
-SIDEBAR_TITLE = "� QAgenie"
-SIDEBAR_SUBTITLE = "AI QA Agent"
+SIDEBAR_TITLE = "� TestRAGic"
+SIDEBAR_SUBTITLE = "QA automation platform"
 LOGO_URL = "src/assets/images/agent-qa-banner-image.png"
 
 # Navigation menu items
@@ -210,8 +210,8 @@ def render_enhanced_logo():
     st.markdown("""
         <div class="sidebar-logo">
             <div style="font-size: 3rem; margin-bottom: 0.5rem;">🤖</div>
-            <div class="sidebar-title">QAgenie</div>
-            <div class="sidebar-subtitle">AI QA Agent</div>
+            <div class="sidebar-title">TestRAGic</div>
+            <div class="sidebar-subtitle">QA automation platform</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -479,7 +479,7 @@ def _get_notifications() -> list:
         sample_notifications = [
             {
                 "level": "info",
-                "message": "Welcome to QAgenie!",
+                "message": "Welcome to TestRAGic!",
                 "timestamp": current_time
             }
         ]

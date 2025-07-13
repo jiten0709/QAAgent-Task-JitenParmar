@@ -35,7 +35,7 @@ from src.dashboard.components.charts import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Test Execution - QAgenie",
+    page_title="Test Execution - TestRAGic",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"

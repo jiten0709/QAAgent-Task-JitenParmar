@@ -54,7 +54,7 @@ DEFAULT_PAGE_CONFIG = {
     "menu_items": {
         'Get Help': 'https://github.com/your-repo/wiki',
         'Report a bug': 'https://github.com/your-repo/issues',
-        'About': '# QAgenie v1.0.0\nAI-powered QA testing platform'
+        'About': '# TestRAGic v1.0.0\nAI-powered QA testing platform'
     }
 }
 

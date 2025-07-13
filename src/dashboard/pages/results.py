@@ -43,7 +43,7 @@ from src.dashboard.components.reports import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Results & Reports - QAgenie",
+    page_title="Results & Reports - TestRAGic",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"

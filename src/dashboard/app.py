@@ -19,7 +19,7 @@ def main():
     initialize_session_state()
     
     st.set_page_config(
-        page_title="QAgenie - AI QA Agent",
+        page_title="TestRAGic - Turning Inputs into Test Cases — Like Magic, but Smarter",
         page_icon="🤖",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -51,7 +51,7 @@ def main():
     """, unsafe_allow_html=True)
     
     # Header
-    st.markdown('<div class="main-header">🤖 QAgenie - AI QA Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🤖 TestRAGic - Turning Inputs into Test Cases</div>', unsafe_allow_html=True)
     st.markdown("*Automated end-to-end frontend test case generation, execution, and reporting*")
     
     # USE THE COMPREHENSIVE SIDEBAR COMPONENT
@@ -111,7 +111,7 @@ def show_api_key_warning():
     """Show API key configuration warning"""
     st.error("🔑 OpenAI API Key Required")
     st.markdown("""
-    Please configure your OpenAI API Key to use QAgenie:
+    Please configure your OpenAI API Key to use TestRAGic:
     
     1. Go to **⚙️ Settings** page
     2. Enter your OpenAI API Key

@@ -29,7 +29,7 @@ from src.dashboard.components.charts import render_test_category_breakdown, rend
 
 # Page configuration
 st.set_page_config(
-    page_title="Test Generation - QAgenie",
+    page_title="Test Generation - TestRAGic",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"

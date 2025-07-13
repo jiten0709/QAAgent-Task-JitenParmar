@@ -9,7 +9,7 @@ This module contains the web dashboard for the QA Agent platform:
 """
 
 # Dashboard configuration
-DASHBOARD_TITLE = "QAgenie - AI-Powered QA Testing Platform"
+DASHBOARD_TITLE = "TestRAGic - AI-Powered QA Testing Platform"
 DASHBOARD_ICON = "🤖"
 DEFAULT_LAYOUT = "wide"
 SIDEBAR_STATE = "expanded"
